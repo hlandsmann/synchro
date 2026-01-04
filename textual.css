@@ -1,0 +1,27 @@
+Screen {
+    align: center middle;
+}
+
+DataTable {
+    height: 1fr;
+    border: solid green;
+}
+
+.modal-container {
+    padding: 2;
+    background: $surface;
+    border: solid $accent;
+    width: 60;
+    height: auto;
+    align: center middle;
+}
+
+.buttons {
+    width: 100%;
+    align: center middle;
+    margin-top: 1;
+}
+
+Button {
+    margin: 0 1;
+}
