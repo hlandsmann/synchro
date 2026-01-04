@@ -154,11 +154,14 @@ class FileListTable(App):
         columns = ["Name", "subs", "md5", "size"]
         # self.table_offset = len(colums)
         for key in self.locations:
-            columns.append(key)
+            columns.append(self.locations[key]["label"])
         columns.append('status')
         table.add_columns(*columns)
         self.columns = columns
         self.load_data_table()
+
+    def on_unmount(self):
+        self.dm.save_cache()
 
     def move_cursor(self, name, old_cursor):
         table = self.query_one(DataTable)

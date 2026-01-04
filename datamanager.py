@@ -2,8 +2,10 @@
 import os
 import subprocess
 from pathlib import Path
+import json
 
 def is_mounted(dir_path):
+    return os.path.exists(dir_path)
     try:
         return len(os.listdir(dir_path)) != 0
     except:
@@ -40,6 +42,33 @@ class DataManager:
         self.locations = locations
         self.cache = {}
         self.online_status = {}
+        self.load_cache()
+
+    def save_cache(self):
+        cache_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache")
+        Path(cache_path).mkdir(exist_ok=True)
+        for loc_key in self.locations:
+            if not loc_key in self.cache:
+                continue
+            cache_file = os.path.join(cache_path, f"{loc_key}.json")
+            with open(cache_file, "w") as f:
+                cache_content = {}
+                cache_content[loc_key] = self.cache[loc_key]
+                json.dump(self.cache[loc_key], f, indent=2)
+
+    def load_cache(self):
+        cache_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache")
+        Path(cache_path).mkdir(exist_ok=True)
+        for loc_key in self.locations:
+            cache_file = os.path.join(cache_path, f"{loc_key}.json")
+            if not os.path.exists(cache_file):
+                continue
+            try:
+                with open(cache_file, 'r') as f:
+                    self.cache[loc_key] = json.load(f)
+            except:
+                pass
+
 
 
     def scan_location(self, loc_key):
