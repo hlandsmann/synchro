@@ -1,5 +1,6 @@
 Screen {
     align: center middle;
+    layout: vertical; 
 }
 
 DataTable {
@@ -25,3 +26,11 @@ DataTable {
 Button {
     margin: 0 1;
 }
+
+#search {
+    dock: bottom;
+    margin: 0 0;
+    display: none;
+    border: solid cyan;
+}
+#search.visible { display: block; }

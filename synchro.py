@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from textual.app import App
-from textual.widgets import DataTable, Header, Footer
+from textual.widgets import DataTable, Header, Footer, Input
 from textual.coordinate import Coordinate
 from datamanager import DataManager
 from renamemodal import RenameModal
@@ -60,6 +60,8 @@ class FileListTable(App):
         ("u", "update", "Update"),
         ("o", "open", "Open"),
         ("e", "execute", "Execute"),
+        ("/", "start_search", "search"),
+        ("escape", "close_search", "reset search"),
     ]
 
     def __init__(self):
@@ -69,6 +71,8 @@ class FileListTable(App):
         self.am = ActionManager(self.locations)
         self.md5 = Md5Sum(self.locations)
         self.items = []
+        self.filtered = []
+        self.search_query = ""
         # self.table_offset = 0
         self.columns = []
         self.execution_running = False
@@ -77,12 +81,13 @@ class FileListTable(App):
         self.title = "synchro"
         yield Header()
         yield DataTable(cursor_type="row")
+        yield Input(id = "search", placeholder="Filter first column...",)
         yield Footer()
 
     def refresh_data_table(self):
         table = self.query_one(DataTable)
         table.clear()
-        for item in self.items:
+        for item in self.filtered:
             display_name = item['name']
             if item['is_dir']:
                 display_name = f"[bold white]{display_name}[/]"
@@ -128,11 +133,20 @@ class FileListTable(App):
                 row.append(cell)
             table.add_row(*row)
 
+    def get_filtered(self):
+        filtered = []
+        for item in self.items:
+            if self.search_query in item['name'].lower():
+                filtered.append(item) 
+        return filtered
+
     def load_data_table(self):
         self.items = self.dm.get_merged_view()
         for idx, item in enumerate(self.items):
             md5stats = [self.md5.get_md5stat_for_location(item['name'], loc_key) for loc_key in item['locations']]
             self.items[idx]['md5stats'] = md5stats
+
+        self.filtered = self.get_filtered()
         self.refresh_data_table()
 
     def on_mount(self) -> None:
@@ -149,7 +163,7 @@ class FileListTable(App):
     def move_cursor(self, name, old_cursor):
         table = self.query_one(DataTable)
         idx = next(
-            (i for i, d in enumerate(self.items) if d.get('name') == name),
+            (i for i, d in enumerate(self.filtered) if d.get('name') == name),
             None
         )
         if idx is not None:
@@ -163,11 +177,11 @@ class FileListTable(App):
 
     def action_down(self):
         table = self.query_one(DataTable)
-        table.move_cursor(row=min(len(self.items)-1, table.cursor_row + 1))
+        table.move_cursor(row=min(len(self.filtered)-1, table.cursor_row + 1))
 
     def action_page_down(self):
         table = self.query_one(DataTable)
-        table.move_cursor(row=min(len(self.items)-1, table.cursor_row + 20))
+        table.move_cursor(row=min(len(self.filtered)-1, table.cursor_row + 20))
 
     def action_page_up(self):
         table = self.query_one(DataTable)
@@ -181,11 +195,14 @@ class FileListTable(App):
             return
 
 
-        old_name = self.items[table.cursor_row]['name']
+        old_name = self.filtered[table.cursor_row]['name']
         def handle_rename(new_name):
             if new_name and new_name != old_name:
                 self.dm.rename_item( old_name, new_name)
+                if self.search_query not in new_name.lower():
+                    self.search_query = ""
                 self.load_data_table()
+
             self.move_cursor(new_name, None)
         self.push_screen(RenameModal(old_name), handle_rename)
 
@@ -194,7 +211,7 @@ class FileListTable(App):
         if table.cursor_row is None:
             return
 
-        name = self.items[table.cursor_row]['name']
+        name = self.filtered[table.cursor_row]['name']
         self.dm.open_directory(name)
 
 
@@ -207,7 +224,7 @@ class FileListTable(App):
         if table.cursor_row is None:
             return
         table_idx = table.cursor_row
-        entry = self.items[table_idx]
+        entry = self.filtered[table_idx]
         loc_key = list(self.locations)[idx]
         self.am.toggle_availability(loc_key, entry)
         self.refresh_data_table()
@@ -220,7 +237,7 @@ class FileListTable(App):
         if table.cursor_row is None:
             return
         table_idx = table.cursor_row
-        entry = self.items[table_idx]
+        entry = self.filtered[table_idx]
         self.am.toggle_md5_scan(entry)
         self.refresh_data_table()
         table.move_cursor(row=table_idx)
@@ -228,7 +245,7 @@ class FileListTable(App):
 
     def update_cell(self, name: str, column_name: str, content: str):
         row = next(
-            (i for i, d in enumerate(self.items) if d.get('name') == name)
+            (i for i, d in enumerate(self.filtered) if d.get('name') == name)
         )
         column = next(
             (i for i, d in enumerate(self.columns) if d == column_name)
@@ -242,7 +259,7 @@ class FileListTable(App):
 
         if column_name == 'status':
             try:
-                coordinate = Coordinate(row = len(self.items), column = 0)
+                coordinate = Coordinate(row = len(self.filtered), column = 0)
                 row_key = table.coordinate_to_cell_key(coordinate).row_key
                 table.remove_row(row_key)
             except:
@@ -266,7 +283,7 @@ class FileListTable(App):
             def finish_progress_callable():
                 self.load_data_table()
                 self.execution_running = False
-                table.move_cursor(row = min(len(self.items)-1, cursor_row))
+                table.move_cursor(row = min(len(self.filtered)-1, cursor_row))
                 os.system("cvlc --play-and-exit /home/harmen/Misc/default_alarm.wav")
             self.call_from_thread(finish_progress_callable)
         def execute():
@@ -276,6 +293,46 @@ class FileListTable(App):
     def action_update(self):
         self.load_data_table()
 
+    def action_start_search(self) -> None:
+        """Show the input and focus it."""
+        search_input = self.query_one(Input)
+        search_input.add_class("visible")
+        search_input.focus()
+
+    def action_close_search(self) -> None:
+        """
+        Triggered by ESC.
+        Hides the input AND clears the value to reset the table.
+        """
+        search_input = self.query_one(Input)
+        search_input.remove_class("visible")
+        search_input.value = ""  # <--- This resets the filter
+        self.query_one(DataTable).focus()
+
+    def on_input_submitted(self, message: Input.Submitted) -> None:
+        """
+        Triggered by ENTER.
+        Hides the input, but keeps the value (table stays filtered).
+        """
+        if message.input.id != "search":
+            return
+        search_input = self.query_one(Input)
+        search_input.remove_class("visible")
+        # Note: We do NOT clear search_input.value here
+        self.query_one(DataTable).focus()
+
+
+    def on_input_changed(self, message: Input.Changed) -> None:
+        """Updates the table contents based on the input value."""
+        if message.input.id != "search":
+            return
+        self.search_query = message.value.lower()
+        table = self.query_one(DataTable)
+        
+        table.clear()
+        self.filtered = self.get_filtered()
+        
+        self.refresh_data_table()
 # # Update column 1 (index 1) of that row
 # col_key = table.columns[1].key 
 # table.update_cell(row_key, col_key, "New Value")
