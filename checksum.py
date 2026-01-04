@@ -34,13 +34,10 @@ def parse_checksum_file(checksum_path):
     if os.path.exists(checksum_path):
         with open(checksum_path, 'r') as f:
             for line in f:
-                parts = line.strip().split()
+                parts = line.split(" ", 1)
                 if len(parts) >= 2:
                     hash_val = parts[0]
-                    filename = ' '.join(parts[1:])
-                    # Remove binary/text indicators
-                    if filename.startswith('*') or filename.startswith(' '):
-                        filename = filename.lstrip('* ')
+                    filename = parts[1].strip()
                     checksums[filename] = hash_val
     return checksums
 
@@ -51,7 +48,7 @@ def write_checksum_file(checksum_path, data):
     with open(checksum_path, 'w') as f:
         # Sort keys for consistent output
         for filename in sorted(data.keys()):
-            f.write(f"{data[filename]}  {filename}\n")
+            f.write(f"{data[filename]} {filename}\n")
 
 def run_md5_check(root_dir, update_progress: Callable):
     global_errors = []
